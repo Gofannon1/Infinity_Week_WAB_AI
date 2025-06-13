@@ -342,6 +342,3 @@ def feedback():
 
     return render_template("index.html", response=last_response, user_input=user_input)
 
-if __name__ == "__main__":
-    load_files()
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
