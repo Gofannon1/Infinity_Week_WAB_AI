@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: wab-ai-assistant
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn main:app"
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: secure_random_key
+        sync: false
+    plan: free
+    autoDeploy: true

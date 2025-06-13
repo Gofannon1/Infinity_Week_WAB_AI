@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WAB AI Assistant</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #004d40 0%, #00796b 100%);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+      text-align: center;
+      color: #00332e;
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #555;
+      font-size: 1.1em;
+      margin-bottom: 30px;
+    }
+
+    .chat-form {
+      margin-bottom: 30px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 15px;
+      border: 2px solid #ccc;
+      border-radius: 25px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus {
+      border-color: #00bfa5;
+    }
+
+    button {
+      padding: 6px 12px;
+      background: linear-gradient(45deg, #00796b, #004d40);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+    }
+
+    .chat-message {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      max-width: 100%;
+    }
+
+    .user-message {
+      background-color: #e0f7fa;
+      color: #00332e;
+      border: 2px solid #2196f3;
+      margin-left: auto;
+      text-align: left;
+    }
+
+    .ai-message {
+      background-color: #f1f1f1;
+      color: #333;
+      margin-right: auto;
+      text-align: left;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .button-row button {
+      padding: 6px 12px;
+      border: none;
+      background-color: #00796b;
+      color: white;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .button-row button:hover {
+      background-color: #004d40;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    .wab-logo {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .wab-logo img {
+      max-height: 100px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="wab-logo">
+      <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGTFu5pDGVjEJshbJisNmb6-o3bhEstk1RZg&s" alt="WAB Logo">
+    </div>
+    <h1>WAB AI Assistant</h1>
+    <p class="subtitle">Ask anything about life at Western Academy of Beijing — academics, sports, clubs, or admissions.</p>
+
+    <form method="POST" class="chat-form">
+      <div class="input-group">
+        <input type="text" name="user_input" placeholder="Try: Tell me something about WAB" required />
+        <button type="submit">Ask</button>
+      </div>
+    </form>
+
+    {% if response and user_input %}
+      <div class="chat-message user-message">
+        {{ user_input }}
+      </div>
+
+      <div class="chat-message ai-message">
+        {{ response | safe }}
+      </div>
+
+      <div class="button-row">
+        <button onclick="copyResponseText()">Copy</button>
+        <button onclick="downloadResponseText()">Download</button>
+
+        <button
+          hx-post="/feedback"
+          hx-vals='{"feedback":"up"}'
+          hx-include="[name=user-input],[name=ai-response]"
+          aria-label="Thumbs up"
+        >👍</button>
+        <button
+          hx-post="/feedback"
+          hx-vals='{"feedback":"down"}'
+          hx-include="[name=user-input],[name=ai-response]"
+          aria-label="Thumbs down"
+        >👎</button>
+
+        <input type="hidden" name="user-input" value="{{ user_input }}">
+        <input type="hidden" name="ai-response" value="{{ response | safe }}">
+      </div>
+    {% endif %}
+
+    <div class="footer">
+      <p>💬 Try asking: “What sports does WAB offer?” or “Tell me about student life.”</p>
+      <p>Built with ❤️ for the WAB community • Powered by OpenAI</p>
+    </div>
+  </div>
+
+  <script>
+    function copyResponseText() {
+      const el = document.createElement('textarea');
+      el.value = document.querySelector('.ai-message')?.innerText || '';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      alert('Text copied to clipboard!');
+    }
+
+    function downloadResponseText(filename = 'response.txt') {
+      const text = document.querySelector('.ai-message')?.innerText || '';
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    }
+  </script>
+</body>
+</html>
