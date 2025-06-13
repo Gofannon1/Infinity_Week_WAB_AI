@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 import re
-from markdown import markdown as md
+from markdown import markdown
 from langdetect import detect
 from deep_translator import GoogleTranslator
 import io
@@ -150,12 +150,20 @@ def get_top_chunks(user_input, files, max_token_budget=3000):
             total += tokens
     return selected
 
+# ✅ Markdown render
+
+def render_markdown_safe(text):
+    return markdown(
+        text,
+        extensions=["extra", "sane_lists"],
+        output_format='html5'
+    )
+
 def ask_reasoning_engine(user_input, context_chunks, history_limit=5):
     try:
         if not user_input.strip():
             return "⚠️ Lege vraag ontvangen."
 
-        # Fallback voor detectie en vertaling
         try:
             detected_lang = detect(user_input)
         except:
@@ -168,23 +176,19 @@ def ask_reasoning_engine(user_input, context_chunks, history_limit=5):
 
         user_vec = get_embedding(user_input)
 
-        # 🔄 Gespreksgeschiedenis
         recent_conversations = chat_memory.get("conversations", [])[-history_limit:]
         history_context = "\n\n".join(
             f"User: {c['user']}\nAI: {c['assistant']}"
             for c in recent_conversations if c['user'] and c['assistant']
         )
 
-        # 📄 Context uit documenten
         context = "\n\n".join([
             f"From {fname} (likely section: {chunk.split('[Section: ')[-1].split(']')[0]}):\n{chunk}"
             for _, chunk, fname in context_chunks
         ])
 
-        # 🔍 Entity memory
         entities = "\n".join([f"{k}: {v}" for k, v in entity_memory.items()])
 
-        # 👍👎 Feedback-analyse
         good_examples = []
         bad_examples = []
         for conv in chat_memory.get("conversations", []):
@@ -203,7 +207,6 @@ def ask_reasoning_engine(user_input, context_chunks, history_limit=5):
             f"Q: {ex['user']}\nA: {ex['assistant']}" for ex in bad_examples[:2]
         )
 
-        # 📜 System prompt
         prompt = f"""
 ### 🧠 You are a highly intelligent AI assistant designed to emulate GPT-4 reasoning behavior.
 
@@ -229,18 +232,11 @@ You synthesize accurate, clear, and well-organized answers using:
 - Start each answer with a brief summary sentence or direct answer
 
 ---
-### ❗ Instructions:
-1. **Never say "I don’t know"**. Instead, infer a likely answer or explain why data is missing.
-2. **Do not guess wildly**—be thoughtful, clear, and explain your reasoning.
-3. Favor **specific** and **relevant** information over vague generalities.
-4. When multiple possible answers exist, explain them and **recommend** the most likely.
-
-### ✅ Preferred Answer Styles (from past upvotes):
+### ✅ Preferred Answer Styles:
 {good_section}
 
-### ⚠️ Avoid These Styles (from past downvotes):
+### ⚠️ Avoid These Styles:
 {bad_section}
-
 
 ---
 ### Entity Memory:
@@ -258,6 +254,11 @@ You synthesize accurate, clear, and well-organized answers using:
             {"role": "user", "content": translated_input}
         ]
 
+
+    # 🛠 DEBUG: Show top matching chunks
+    print("[DEBUG] Top matching chunks:")
+    for i, chunk in enumerate(top_chunks):
+        print(f"[{i+1}] {chunk[:200]}...")
         result = client.chat.completions.create(model=CHAT_MODEL, messages=messages)
         answer = result.choices[0].message.content.strip()
 
@@ -273,7 +274,7 @@ You synthesize accurate, clear, and well-organized answers using:
         print("[DEBUG] Answer generated:")
         print(translated_answer)
 
-        return md(translated_answer)
+        return render_markdown_safe(translated_answer)
 
     except Exception as e:
         print(f"[ERROR] Failed to generate answer: {e}")
@@ -313,32 +314,38 @@ def download():
         mimetype="text/plain"
     )
 
-# 👍👎 Feedback route
 @app.route("/feedback", methods=["POST"])
 def feedback():
-    user_input = request.form.get("user_input", "")
-    fb = request.form.get("feedback")
-    last_response = session.get("last_response", "")
+    user_input = request.form.get("user_input", "").strip()
+    fb = request.form.get("feedback", "").strip()
+    last_response = session.get("last_response", "").strip()
 
-    print(f"[FEEDBACK] User gave a {fb} for: {user_input}")
+    print(f"[FEEDBACK] Feedback: {fb} | Input: {user_input[:50]} | Response: {last_response[:50]}")
 
-    chat_memory["conversations"].append({
-        "user": user_input,
-        "assistant": last_response,
-        "feedback": fb
-    })
-    save_json(chat_memory, chat_memory_path)
+    if user_input and last_response:
+        chat_memory["conversations"].append({
+            "user": user_input,
+            "assistant": last_response,
+            "feedback": fb
+        })
+        save_json(chat_memory, chat_memory_path)
+    else:
+        print("[WARN] Missing user input or response – feedback not saved.")
 
     if fb == "down":
         rewritten = rewrite_question(user_input)
         best_files = get_best_files(rewritten)
         top_chunks = get_top_chunks(rewritten, best_files)
-        answer = ask_reasoning_engine(
+        improved_answer = ask_reasoning_engine(
             user_input + "\n\nPlease improve your answer slightly: be clearer, more helpful, or structured.",
             top_chunks
         )
-        session['last_response'] = answer
-        return render_template("index.html", response=answer, user_input=user_input)
+        session['last_response'] = improved_answer
+        return render_template("index.html", response=improved_answer, user_input=user_input)
 
     return render_template("index.html", response=last_response, user_input=user_input)
 
+
+if __name__ == "__main__":
+    load_files()
+    app.run(debug=True, host="0.0.0.0", port=3000)
