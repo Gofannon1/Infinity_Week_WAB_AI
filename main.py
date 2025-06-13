@@ -254,11 +254,6 @@ You synthesize accurate, clear, and well-organized answers using:
             {"role": "user", "content": translated_input}
         ]
 
-
-    # 🛠 DEBUG: Show top matching chunks
-    print("[DEBUG] Top matching chunks:")
-    for i, chunk in enumerate(top_chunks):
-        print(f"[{i+1}] {chunk[:200]}...")
         result = client.chat.completions.create(model=CHAT_MODEL, messages=messages)
         answer = result.choices[0].message.content.strip()
 
